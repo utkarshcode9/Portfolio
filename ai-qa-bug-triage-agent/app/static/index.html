@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AI QA Bug Triage Agent</title>
+  <style>
+    :root{font-family:Inter,Arial,sans-serif;color:#111827;background:#f3f4f6}
+    body{margin:0}.wrap{max-width:1180px;margin:0 auto;padding:28px}
+    h1{margin:0 0 6px}.sub{color:#6b7280;margin-bottom:24px}
+    .grid{display:grid;grid-template-columns:repeat(6,1fr);gap:12px}.card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+    .metric{font-size:28px;font-weight:700}.label{font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.04em}
+    .two{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:18px}label{display:block;font-size:12px;font-weight:700;margin:10px 0 5px}
+    input,textarea{width:100%;box-sizing:border-box;border:1px solid #d1d5db;border-radius:8px;padding:10px;font:inherit}textarea{min-height:82px}
+    button{background:#111827;color:white;border:0;border-radius:8px;padding:10px 15px;font-weight:700;cursor:pointer;margin-top:12px}.secondary{background:#2563eb}
+    table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:10px;border-bottom:1px solid #e5e7eb;vertical-align:top}
+    .pill{display:inline-block;padding:3px 8px;border-radius:999px;background:#eef2ff;font-size:12px;font-weight:700}.danger{background:#fee2e2}.warn{background:#fef3c7}.ok{background:#dcfce7}
+    pre{white-space:pre-wrap;background:#0f172a;color:#e2e8f0;border-radius:9px;padding:12px;max-height:320px;overflow:auto}
+    @media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}.two{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>AI QA / Bug Triage Automation Agent</h1>
+  <div class="sub">Classify defects • assign severity/priority • detect duplicates • generate test cases • human approval • Jira-ready</div>
+  <div id="metrics" class="grid"></div>
+
+  <div class="two">
+    <div class="card">
+      <h2>Submit a bug</h2>
+      <form id="bugForm">
+        <label>Title</label><input name="title" required value="UPI payment succeeds but order remains pending" />
+        <label>Description</label><textarea name="description" required>Customer completes UPI payment and money is deducted, but checkout remains on pending and order is not confirmed.</textarea>
+        <label>Steps to reproduce</label><textarea name="steps_to_reproduce">Login → add item → checkout → select UPI → pay successfully → return to app</textarea>
+        <label>Expected result</label><input name="expected_result" value="Order should be confirmed after successful payment" />
+        <label>Actual result</label><input name="actual_result" value="Order remains pending" />
+        <label>Environment</label><input name="environment" value="Production-like QA | Chrome | Android 15" />
+        <label>Customer impact</label><input name="customer_impact" value="Money deducted; user cannot complete checkout" />
+        <button type="submit">Run AI triage</button>
+      </form>
+    </div>
+    <div class="card">
+      <h2>Latest triage result</h2>
+      <pre id="result">Submit a bug to see structured triage output.</pre>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:18px">
+    <h2>Human review queue</h2>
+    <div id="queue"></div>
+  </div>
+
+  <div class="card" style="margin-top:18px">
+    <h2>Recent defects</h2>
+    <div id="bugs"></div>
+  </div>
+</div>
+<script>
+const api='';
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function loadMetrics(){const m=await fetch(api+'/api/v1/metrics').then(r=>r.json());document.querySelector('#metrics').innerHTML=Object.entries(m).map(([k,v])=>`<div class="card"><div class="metric">${v}</div><div class="label">${k.replaceAll('_',' ')}</div></div>`).join('')}
+function pill(sev){let cls=sev==='critical'?'danger':sev==='high'?'warn':'ok';return `<span class="pill ${cls}">${esc(sev)}</span>`}
+async function loadQueue(){const rows=await fetch(api+'/api/v1/review-queue').then(r=>r.json());document.querySelector('#queue').innerHTML=rows.length?`<table><tr><th>ID</th><th>Bug</th><th>Severity</th><th>Priority</th><th>Duplicate</th><th>Action</th></tr>${rows.map(b=>`<tr><td>${b.id}</td><td><b>${esc(b.title)}</b><br><small>${esc(b.ai_summary)}</small></td><td>${pill(b.severity)}</td><td>${esc(b.priority)}</td><td>${b.duplicate_of?'#'+b.duplicate_of+' ('+b.duplicate_score+'%)':'—'}</td><td><button class="secondary" onclick="approve(${b.id})">Approve</button></td></tr>`).join('')}</table>`:'No bugs require review.'}
+async function loadBugs(){const rows=await fetch(api+'/api/v1/bugs?limit=20').then(r=>r.json());document.querySelector('#bugs').innerHTML=`<table><tr><th>ID</th><th>Title</th><th>Category</th><th>Severity</th><th>Priority</th><th>Status</th></tr>${rows.map(b=>`<tr><td>${b.id}</td><td>${esc(b.title)}</td><td>${esc(b.category)}</td><td>${pill(b.severity)}</td><td>${esc(b.priority)}</td><td>${esc(b.status)}</td></tr>`).join('')}</table>`}
+async function approve(id){await fetch(api+`/api/v1/bugs/${id}/approve`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({approved_by:'manager-demo',create_jira:false,comment:'Reviewed from dashboard'})});await refresh()}
+async function refresh(){await Promise.all([loadMetrics(),loadQueue(),loadBugs()])}
+document.querySelector('#bugForm').addEventListener('submit',async e=>{e.preventDefault();const fd=new FormData(e.target);const body=Object.fromEntries(fd.entries());const r=await fetch(api+'/api/v1/triage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const data=await r.json();document.querySelector('#result').textContent=JSON.stringify(data,null,2);await refresh()});
+refresh();
+</script>
+</body>
+</html>

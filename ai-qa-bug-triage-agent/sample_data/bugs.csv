@@ -1,0 +1,8 @@
+title,description,expected_severity,expected_category
+UPI payment succeeds but order remains pending,Money deducted but order not confirmed,critical,payments
+Login fails after valid OTP,User receives correct OTP but session is not created,high,authentication
+Search API returns 500 for special characters,Endpoint fails for percent symbol,high,api
+Dashboard takes 18 seconds to load,Large account dashboard is very slow,medium,performance
+Button alignment broken on mobile,Checkout button overlaps footer on small screen,low,ui
+Duplicate customer record created,Submitting profile twice creates two records,medium,data
+VPN connection drops after 5 minutes,Employee loses connection repeatedly,medium,network
