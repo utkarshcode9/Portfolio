@@ -1,0 +1,77 @@
+{
+  "name": "AI QA Bug Triage - Manager Demo",
+  "nodes": [
+    {
+      "parameters": {"httpMethod": "POST", "path": "qa-bug-triage", "responseMode": "responseNode", "options": {}},
+      "id": "1",
+      "name": "Bug Intake Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-640, 0],
+      "webhookId": "qa-bug-triage"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8000/api/v1/triage",
+        "sendHeaders": true,
+        "headerParameters": {"parameters": [{"name": "Content-Type", "value": "application/json"}]},
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($json.body || $json) }}",
+        "options": {}
+      },
+      "id": "2",
+      "name": "Call Triage API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-400, 0]
+    },
+    {
+      "parameters": {"conditions": {"options": {"caseSensitive": true, "typeValidation": "strict", "version": 2}, "conditions": [{"id": "review", "leftValue": "={{ $json.requires_human_review }}", "rightValue": true, "operator": {"type": "boolean", "operation": "true", "singleValue": true}}], "combinator": "and"}, "options": {}},
+      "id": "3",
+      "name": "Human Review Required?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-160, 0]
+    },
+    {
+      "parameters": {"assignments": {"assignments": [{"id": "status", "name": "automation_message", "value": "High-risk/low-confidence/duplicate bug routed to human QA review queue.", "type": "string"}]}, "options": {}},
+      "id": "4",
+      "name": "Route to Review Queue",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [80, -100]
+    },
+    {
+      "parameters": {"assignments": {"assignments": [{"id": "status", "name": "automation_message", "value": "Bug auto-approved by policy; Jira creation can be enabled after credentials are configured.", "type": "string"}]}, "options": {}},
+      "id": "5",
+      "name": "Auto Approved",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [80, 100]
+    },
+    {
+      "parameters": {"respondWith": "json", "responseBody": "={{ JSON.stringify($json) }}", "options": {}},
+      "id": "6",
+      "name": "Return Result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [340, 0]
+    }
+  ],
+  "connections": {
+    "Bug Intake Webhook": {"main": [[{"node": "Call Triage API", "type": "main", "index": 0}]]},
+    "Call Triage API": {"main": [[{"node": "Human Review Required?", "type": "main", "index": 0}]]},
+    "Human Review Required?": {"main": [[{"node": "Route to Review Queue", "type": "main", "index": 0}], [{"node": "Auto Approved", "type": "main", "index": 0}]]},
+    "Route to Review Queue": {"main": [[{"node": "Return Result", "type": "main", "index": 0}]]},
+    "Auto Approved": {"main": [[{"node": "Return Result", "type": "main", "index": 0}]]}
+  },
+  "pinData": {},
+  "settings": {"executionOrder": "v1"},
+  "active": false,
+  "versionId": "8dd8b2bf-26b6-47c9-9284-4ad4f32b7311",
+  "meta": {"templateCredsSetupCompleted": true},
+  "tags": []
+}
